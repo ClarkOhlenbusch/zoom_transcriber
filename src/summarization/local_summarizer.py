@@ -7,15 +7,16 @@ from nltk.corpus import stopwords
 from nltk.cluster.util import cosine_distance
 import numpy as np
 import networkx as nx
+import re
 
-class LocalTranscriptSummarizer:
+class ImprovedLocalTranscriptSummarizer:
     """
-    Class for summarizing meeting transcripts using local extractive summarization
-    without requiring external API access
+    Enhanced class for summarizing meeting transcripts using local extractive summarization
+    without requiring external API access, with improvements for more concise, intelligent summaries
     """
     
     def __init__(self):
-        """Initialize the LocalTranscriptSummarizer"""
+        """Initialize the ImprovedLocalTranscriptSummarizer"""
         # Download required NLTK resources if not already present
         try:
             nltk.data.find('tokenizers/punkt')
@@ -31,7 +32,7 @@ class LocalTranscriptSummarizer:
     
     def _format_transcript_for_summarization(self, transcript_data: Dict[str, Any]) -> str:
         """
-        Format transcript data into a string for summarization
+        Format transcript data into a string for summarization with improved formatting
         
         Args:
             transcript_data (dict): Transcript data from TranscriptionManager
@@ -44,9 +45,16 @@ class LocalTranscriptSummarizer:
         for segment in transcript_data["segments"]:
             speaker = segment.get("speaker", "Unknown Speaker")
             text = segment.get("text", "")
-            formatted_text += f"{speaker}: {text}\n"
+            timestamp = self._format_time(segment.get("start", 0))
+            formatted_text += f"[{timestamp}] {speaker}: {text}\n"
         
         return formatted_text
+    
+    def _format_time(self, seconds: float) -> str:
+        """Format time in seconds to MM:SS format"""
+        minutes = int(seconds // 60)
+        seconds = int(seconds % 60)
+        return f"{minutes:02d}:{seconds:02d}"
     
     def _sentence_similarity(self, sent1: List[str], sent2: List[str]) -> float:
         """
@@ -106,9 +114,9 @@ class LocalTranscriptSummarizer:
                 
         return similarity_matrix
     
-    def _extract_summary(self, text: str, num_sentences: int = 5) -> str:
+    def _extract_summary(self, text: str, num_sentences: int = 7) -> str:
         """
-        Extract summary from text using TextRank algorithm
+        Extract summary from text using TextRank algorithm with improved sentence selection
         
         Args:
             text (str): Text to summarize
@@ -147,7 +155,7 @@ class LocalTranscriptSummarizer:
     
     def _extract_action_items(self, text: str) -> List[str]:
         """
-        Extract potential action items from text
+        Extract potential action items from text with improved keyword detection
         
         Args:
             text (str): Text to analyze
@@ -158,21 +166,38 @@ class LocalTranscriptSummarizer:
         action_items = []
         sentences = sent_tokenize(text)
         
-        # Keywords that might indicate action items
-        action_keywords = ['need to', 'should', 'will', 'going to', 'must', 'have to', 'task', 'action', 'follow up', 'follow-up', 'assign']
+        # Enhanced keywords that might indicate action items
+        action_keywords = [
+            'need to', 'should', 'will', 'going to', 'must', 'have to', 
+            'task', 'action', 'follow up', 'follow-up', 'assign', 'responsible',
+            'take care of', 'handle', 'complete', 'finish', 'implement', 'deliver',
+            'due by', 'deadline', 'by tomorrow', 'by next', 'by monday', 'by tuesday',
+            'by wednesday', 'by thursday', 'by friday', 'assigned to'
+        ]
         
+        # Improved pattern matching for action items
         for sentence in sentences:
             lower_sentence = sentence.lower()
             
             # Check if sentence contains action keywords
             if any(keyword in lower_sentence for keyword in action_keywords):
-                action_items.append(sentence)
+                # Look for potential assignees (names followed by verbs)
+                assignee_match = re.search(r'([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)(?:\s+will|\s+should|\s+needs to|\s+is going to)', sentence)
+                
+                # If we found a potential assignee, highlight it
+                if assignee_match:
+                    name = assignee_match.group(1)
+                    # Highlight the assignee in the action item
+                    highlighted = sentence.replace(name, f"**{name}**")
+                    action_items.append(highlighted)
+                else:
+                    action_items.append(sentence)
         
         return action_items
     
     def _extract_decisions(self, text: str) -> List[str]:
         """
-        Extract potential decisions from text
+        Extract potential decisions from text with improved keyword detection
         
         Args:
             text (str): Text to analyze
@@ -183,8 +208,14 @@ class LocalTranscriptSummarizer:
         decisions = []
         sentences = sent_tokenize(text)
         
-        # Keywords that might indicate decisions
-        decision_keywords = ['decide', 'decided', 'agreed', 'agreement', 'conclusion', 'resolved', 'approved', 'confirmed', 'finalized']
+        # Enhanced keywords that might indicate decisions
+        decision_keywords = [
+            'decide', 'decided', 'agreed', 'agreement', 'conclusion', 
+            'resolved', 'approved', 'confirmed', 'finalized', 'consensus',
+            'settled on', 'determined', 'concluded', 'established', 
+            'voted', 'selected', 'chosen', 'opted for', 'went with',
+            'moving forward with', 'proceeding with', 'green light'
+        ]
         
         for sentence in sentences:
             lower_sentence = sentence.lower()
@@ -197,7 +228,7 @@ class LocalTranscriptSummarizer:
     
     def _create_timeline(self, transcript_data: Dict[str, Any], num_points: int = 5) -> List[str]:
         """
-        Create a timeline of main discussion points
+        Create a timeline of main discussion points with improved selection logic
         
         Args:
             transcript_data (dict): Transcript data
@@ -211,9 +242,38 @@ class LocalTranscriptSummarizer:
         
         # If there are very few segments, return all of them
         if len(segments) <= num_points:
-            return [segment.get("text", "") for segment in segments]
+            return [f"[{self._format_time(segment.get('start', 0))}] {segment.get('text', '')}" for segment in segments]
         
-        # Divide transcript into equal parts and take a representative segment from each
+        # Improved approach: identify key segments based on content significance
+        # Look for segments that contain topic transition indicators
+        topic_indicators = [
+            'moving on', 'next topic', 'next item', 'let\'s discuss', 'turning to',
+            'shifting to', 'regarding', 'about the', 'let\'s talk about', 'now for',
+            'to address', 'let me introduce', 'starting with', 'beginning with'
+        ]
+        
+        # Identify potential topic transition points
+        topic_transitions = []
+        for i, segment in enumerate(segments):
+            text = segment.get("text", "").lower()
+            if any(indicator in text for indicator in topic_indicators):
+                topic_transitions.append((i, segment))
+        
+        # If we found enough transition points, use them
+        if len(topic_transitions) >= num_points:
+            # Select evenly distributed transition points
+            step = len(topic_transitions) // num_points
+            selected_transitions = [topic_transitions[i * step] for i in range(num_points)]
+            
+            # Create timeline points from selected transitions
+            timeline_points = []
+            for _, segment in selected_transitions:
+                start_time = self._format_time(segment.get("start", 0))
+                timeline_points.append(f"[{start_time}] {segment.get('text', '')}")
+            
+            return timeline_points
+        
+        # Fallback: divide transcript into equal parts and take a representative segment from each
         timeline_points = []
         chunk_size = len(segments) // num_points
         
@@ -233,15 +293,39 @@ class LocalTranscriptSummarizer:
         
         return timeline_points
     
-    def _format_time(self, seconds: float) -> str:
-        """Format time in seconds to MM:SS format"""
-        minutes = int(seconds // 60)
-        seconds = int(seconds % 60)
-        return f"{minutes:02d}:{seconds:02d}"
+    def _post_process_summary(self, summary: str) -> str:
+        """
+        Post-process the summary to make it more concise and readable
+        
+        Args:
+            summary (str): Raw summary text
+            
+        Returns:
+            str: Processed summary
+        """
+        # Remove redundant speaker labels if they appear in the summary
+        summary = re.sub(r'(Unknown Speaker|Speaker \d+):\s*', '', summary)
+        
+        # Remove timestamp patterns if they appear in the summary
+        summary = re.sub(r'\[\d+:\d+\]\s*', '', summary)
+        
+        # Consolidate multiple spaces
+        summary = re.sub(r'\s+', ' ', summary)
+        
+        # Split into sentences
+        sentences = sent_tokenize(summary)
+        
+        # Remove very short sentences (likely fragments)
+        sentences = [s for s in sentences if len(s.split()) > 3]
+        
+        # Rejoin sentences
+        processed_summary = ' '.join(sentences)
+        
+        return processed_summary
     
     def summarize(self, transcript_data: Dict[str, Any], output_dir: Optional[str] = None) -> Dict[str, Any]:
         """
-        Summarize a meeting transcript
+        Summarize a meeting transcript with improved techniques for more concise, intelligent summaries
         
         Args:
             transcript_data (dict): Transcript data from TranscriptionManager
@@ -253,20 +337,29 @@ class LocalTranscriptSummarizer:
         # Format transcript for summarization
         transcript_text = self._format_transcript_for_summarization(transcript_data)
         
-        # Generate summary
-        summary = self._extract_summary(transcript_text, num_sentences=10)
+        # Generate improved summary
+        raw_summary = self._extract_summary(transcript_text, num_sentences=10)
+        summary = self._post_process_summary(raw_summary)
         
-        # Extract action items
+        # Extract action items with improved detection
         action_items = self._extract_action_items(transcript_text)
         action_items_text = "\n".join([f"- {item}" for item in action_items]) if action_items else "No clear action items identified."
         
-        # Extract decisions
+        # Extract decisions with improved detection
         decisions = self._extract_decisions(transcript_text)
         decisions_text = "\n".join([f"- {decision}" for decision in decisions]) if decisions else "No clear decisions identified."
         
-        # Create timeline
+        # Create timeline with improved selection
         timeline = self._create_timeline(transcript_data)
         timeline_text = "\n".join([f"- {point}" for point in timeline]) if timeline else "Timeline could not be generated."
+        
+        # Create a more structured, concise summary format
+        if not summary.strip():
+            summary = "No clear summary could be generated from the transcript."
+        else:
+            # Add a title based on content analysis
+            title = self._generate_title(transcript_text)
+            summary = f"## {title}\n\n{summary}"
         
         # Prepare results
         results = {
@@ -282,9 +375,38 @@ class LocalTranscriptSummarizer:
         
         return results
     
+    def _generate_title(self, transcript_text: str) -> str:
+        """
+        Generate a title for the meeting based on content analysis
+        
+        Args:
+            transcript_text (str): Transcript text
+            
+        Returns:
+            str: Generated title
+        """
+        # Look for common meeting title indicators
+        title_patterns = [
+            (r'meeting about ([\w\s]+)', r'Meeting: \1'),
+            (r'discussion (?:about|on) ([\w\s]+)', r'\1 Discussion'),
+            (r'today we(?:\'re| are) (?:going to |)(?:talk|discuss) about ([\w\s]+)', r'\1 Meeting'),
+            (r'welcome to (?:the |)([\w\s]+) meeting', r'\1 Meeting'),
+            (r'this is (?:the |)([\w\s]+) (?:meeting|call|discussion)', r'\1 Meeting')
+        ]
+        
+        lower_text = transcript_text.lower()
+        
+        for pattern, replacement in title_patterns:
+            match = re.search(pattern, lower_text)
+            if match:
+                return re.sub(pattern, replacement, match.group(0)).title()
+        
+        # Default title if no pattern matches
+        return "Meeting Summary"
+    
     def _save_summary(self, summary_sections: Dict[str, str], transcript_data: Dict[str, Any], output_dir: str) -> None:
         """
-        Save summary to files
+        Save summary to files with improved formatting
         
         Args:
             summary_sections (dict): Dictionary with summary sections
@@ -304,7 +426,7 @@ class LocalTranscriptSummarizer:
         with open(json_path, 'w') as f:
             json.dump(summary_sections, f, indent=2)
         
-        # Save text summary
+        # Save text summary with improved formatting
         text_path = os.path.join(output_dir, f"{base_name}_summary.txt")
         with open(text_path, 'w') as f:
             f.write("# Meeting Summary\n\n")
