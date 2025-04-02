@@ -9,14 +9,14 @@ import numpy as np
 import networkx as nx
 import re
 
-class ImprovedLocalTranscriptSummarizer:
+class LocalTranscriptSummarizer:
     """
     Enhanced class for summarizing meeting transcripts using local extractive summarization
     without requiring external API access, with improvements for more concise, intelligent summaries
     """
     
     def __init__(self):
-        """Initialize the ImprovedLocalTranscriptSummarizer"""
+        """Initialize the LocalTranscriptSummarizer"""
         # Download required NLTK resources if not already present
         try:
             nltk.data.find('tokenizers/punkt')

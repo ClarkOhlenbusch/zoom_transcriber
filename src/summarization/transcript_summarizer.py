@@ -8,7 +8,7 @@ from langchain.chains.summarize import load_summarize_chain
 from langchain_community.llms import HuggingFaceHub
 from langchain.prompts import PromptTemplate
 
-class ImprovedTranscriptSummarizer:
+class TranscriptSummarizer:
     """
     Enhanced class for summarizing meeting transcripts using LangChain
     with improved prompts for more concise, intelligent summaries
@@ -16,7 +16,7 @@ class ImprovedTranscriptSummarizer:
     
     def __init__(self, huggingface_model="google/flan-t5-large"):
         """
-        Initialize the ImprovedTranscriptSummarizer
+        Initialize the TranscriptSummarizer
         
         Args:
             huggingface_model (str): HuggingFace model to use for summarization
