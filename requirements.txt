@@ -1,0 +1,19 @@
+# Required dependencies for the Zoom Transcriber and Summarizer
+
+# Core dependencies
+streamlit>=1.44.0
+faster-whisper>=1.1.0
+langchain>=0.3.0
+langchain-community>=0.3.0
+huggingface-hub>=0.30.0
+
+# Audio processing
+librosa>=0.11.0
+ffmpeg-python>=0.2.0
+
+# Machine learning
+scikit-learn>=1.6.0
+numpy>=2.0.0
+
+# Utilities
+python-dotenv>=1.0.0
